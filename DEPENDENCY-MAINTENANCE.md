@@ -1,7 +1,10 @@
-# Dependency consolidation (2026-11-17)
+# Dependency consolidation (2026-11-19)
 
 This is a **partial security remediation**, not a clean security bill of health.
 Both npm lockfiles are updated without changing the declared dependency ranges.
+Both manifests now narrowly override `@typescript-eslint/typescript-estree`'s
+exact semver 5.5.0 pin with the patched, same-major 5.7.2. This applies to both
+legacy parser installations; unrelated semver consumers are not overridden.
 The lockfiles now use npm lockfile format 3; validation used Node 26.7.0 and npm
 11.19.0. Older npm versions and the external `jk` executable were not validated.
 
@@ -44,17 +47,25 @@ npm audit --prefix @jaxxstorm/pulumi-action-config --omit=dev --json
 ```
 
 Clean installs (including lifecycle scripts), compilation, the legacy lint
-command, explicit source lint, and all three regression tests pass. The same
-regression fails against the original locks at ajv 6.12.2 in both trees. The
+command, explicit source lint, and all five regression tests pass. The dependency
+regression fails against the original locks at ajv 6.12.2 in both trees. Against
+the previous consolidation commit (6ee722d), four tests fail on semver 5.5.0
+while the workflow smoke passes. Parser regressions exercise actual parser-local
+semver resolution, supported/unsupported TypeScript ranges, a typed declaration,
+and invalid syntax in both parser versions and both distributions. The
 legacy TypeScript parser emits an existing unsupported-TypeScript warning.
 The `.cjs` test is executed by Node, not covered by the legacy TypeScript lint
-pattern. Repeated compilation produces the same SHA-256 as the base artifact:
+pattern. Repeated compilation leaves both tracked workflow modules byte-identical
+to the previous consolidation: root `workflow.js` SHA-256 is
+`6007e1d32234db6acd58181e2dfa47d2dc5a0a066566a425595a644470972008`;
+nested `@jaxxstorm/pulumi-action-config/workflow.js` SHA-256 is
 `24c224665b58060d1b75ceeea0ba4da5583e16814a7f23ba03366a44c103066d`.
 
 ## Remaining blockers
 
-Full npm audit still exits 1 in **each** tree: 22 affected package entries
-(12 high, 8 moderate, 2 low), down from 45 (including 2 critical). These totals
+Full npm audit still exits 1 in **each** tree: 17 affected package entries
+(7 high, 8 moderate, 2 low), down from 22 in the previous consolidation and
+45 (including 2 critical) in the original baseline. These totals
 include affected parent packages and are not counts of distinct advisories.
 Production-only audits pass with zero findings; all declared dependencies are
 development dependencies, so this does not excuse the development-tool risk.
@@ -66,12 +77,14 @@ Exact remaining advisory-bearing packages in both locks:
 | braces 2.3.2 | GHSA-grv7-fg5c-xmjg |
 | flatted 2.0.2 | GHSA-25h7-pfq9-p65f; GHSA-rf6f-7fwh-wjgh |
 | micromatch 3.1.10 | GHSA-952p-6rrq-rcjv |
-| semver 5.5.0 (two nested TypeScript-ESLint paths) | GHSA-c2qf-rxjj-qqgw |
 | tmp 0.0.33 | GHSA-52f5-9888-hmc6; GHSA-ph9p-34f9-6g65 |
 
 The remaining parents include the legacy Babel/Jest and ESLint/TypeScript-ESLint
 stacks. Their major upgrades or targeted overrides need separate compatibility
 work; this change does not force incompatible versions merely to clear audit.
+GHSA-c2qf-rxjj-qqgw is remediated by semver 5.7.2; the targeted override is
+necessary because the old parsers pin 5.5.0 exactly, so ordinary lockfile refreshes
+cannot select the fixed version. Full `npm ls --all` succeeds in both trees.
 Keep the consolidation draft until these findings have an agreed remediation
 and suitable CI validates the locked installations and regression tests. There
 is no repository `.github/workflows` CI definition at the base commit. End-to-end

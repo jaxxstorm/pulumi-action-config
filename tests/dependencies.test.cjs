@@ -2,6 +2,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const { test } = require('node:test');
+const { createRequire } = require('node:module');
 
 const root = path.resolve(__dirname, '..');
 const distributions = ['.', '@jaxxstorm/pulumi-action-config'];
@@ -13,6 +14,7 @@ const minimums = {
   tmpl: '1.0.5',
   ajv: '6.12.6',
   minimist: '1.2.8',
+  semver: '5.7.2',
   'decode-uri-component': '0.2.2',
 };
 
@@ -46,7 +48,9 @@ for (const directory of distributions) {
       const name = location.split('node_modules/').pop();
       const minimum = name === 'json5'
         ? (pkg.version.startsWith('1.') ? '1.0.2' : '2.2.3')
-        : minimums[name];
+        : name === 'semver'
+          ? ({ 5: '5.7.2', 6: '6.3.1', 7: '7.5.2' }[pkg.version.split('.')[0]] || minimums.semver)
+          : minimums[name];
       if (!minimum) continue;
       seen.add(name);
       assert.match(pkg.version, /^\d+\.\d+\.\d+$/, `${location}: expected a stable version`);
@@ -58,6 +62,25 @@ for (const directory of distributions) {
     // decode-uri-component. If it returns, the version check above applies.
     const required = [...Object.keys(minimums), 'json5'].filter(name => name !== 'decode-uri-component');
     assert.deepEqual([...seen].filter(name => name !== 'decode-uri-component').sort(), required.sort());
+  });
+
+  test(`${directory}: both legacy parsers use patched compatible semver`, () => {
+    const base = path.join(root, directory, 'node_modules/@typescript-eslint');
+    for (const parser of [
+      'typescript-estree',
+      'eslint-plugin/node_modules/@typescript-eslint/typescript-estree',
+    ]) {
+      const entry = require.resolve(path.join(base, parser));
+      const fromParser = createRequire(entry);
+      const semver = fromParser('semver');
+      assert.equal(fromParser('semver/package.json').version, '5.7.2');
+      assert.equal(semver.satisfies('3.4.5', '>=3.2.1 <3.5.0'), true);
+      assert.equal(semver.satisfies('3.9.3', '>=3.2.1 <3.6.0'), false);
+      const ast = require(entry).parse('const answer: number = 42;');
+      assert.equal(ast.body[0].declarations[0].id.name, 'answer');
+      assert.equal(ast.body[0].declarations[0].init.value, 42);
+      assert.throws(() => require(entry).parse('const = ;'));
+    }
   });
 }
 
