@@ -18,6 +18,11 @@
     "eslint-plugin-jest": "^22.4.1",
     "typescript": "^3.4.3"
   },
+  "overrides": {
+    "@typescript-eslint/typescript-estree": {
+      "semver": "5.7.2"
+    }
+  },
   "homepage": "https://github.com/jaxxstorm/pulumi-action-config#readme",
   "keywords": [
     "configuration",
